@@ -1,3 +1,3 @@
-module github.com/omniscale/go-mapnik/v2
+module github.com/KanesRF/go-mapnik/v2
 
 go 1.12
