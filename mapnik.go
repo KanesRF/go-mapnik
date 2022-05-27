@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"image/draw"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,28 +69,29 @@ func RegisterDatasources(path string) error {
 	return nil
 }
 
-// RegisterDatasources registers all fonts found in the given path.
-func RegisterFonts(path string) error {
-	fileInfos, err := ioutil.ReadDir(path)
-	if err != nil {
-		return err
-	}
-
-	for _, file := range fileInfos {
-		fullPath := filepath.Join(path, file.Name())
-		if !isFontFile(fullPath) {
-			continue
-		}
-		cs := C.CString(fullPath)
-		defer C.free(unsafe.Pointer(cs))
-		// Register fonts one-by-one. See comment in RegisterDatasources.
-		if C.mapnik_register_font(cs) == 0 {
-			e := C.GoString(C.mapnik_register_last_error())
-			if e != "" {
-				return errors.New("registering fonts: " + e)
+func RegisterFonts(fontPath string) error {
+	err := filepath.Walk(fontPath,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
 			}
-			return errors.New("error while registering fonts")
-		}
+			if !isFontFile(path) {
+				return nil
+			}
+			cs := C.CString(path)
+			defer C.free(unsafe.Pointer(cs))
+			// Register fonts one-by-one. See comment in RegisterDatasources.
+			if C.mapnik_register_font(cs) == 0 {
+				e := C.GoString(C.mapnik_register_last_error())
+				if e != "" {
+					return errors.New("registering fonts: " + e)
+				}
+				return errors.New("error while registering fonts")
+			}
+			return nil
+		})
+	if err != nil {
+		log.Println(err)
 	}
 	return nil
 }
