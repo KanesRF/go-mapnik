@@ -132,7 +132,7 @@ func init() {
 
 // Map base type
 type Map struct {
-	m           C.struct__mapnik_map_t
+	m           *C.struct__mapnik_map_t
 	width       int
 	height      int
 	layerStatus []bool
@@ -141,7 +141,7 @@ type Map struct {
 // New initializes a new Map.
 func New() *Map {
 	return &Map{
-		m:      *C.mapnik_map(C.uint(800), C.uint(600)),
+		m:      C.mapnik_map(C.uint(800), C.uint(600)),
 		width:  800,
 		height: 600,
 	}
@@ -150,14 +150,14 @@ func New() *Map {
 // NewSized initializes a new Map with the given size.
 func NewSized(width, height int) *Map {
 	return &Map{
-		m:      *C.mapnik_map(C.uint(width), C.uint(height)),
+		m:      C.mapnik_map(C.uint(width), C.uint(height)),
 		width:  width,
 		height: height,
 	}
 }
 
 func (m *Map) lastError() error {
-	return errors.New("mapnik: " + C.GoString(C.mapnik_map_last_error(&m.m)))
+	return errors.New("mapnik: " + C.GoString(C.mapnik_map_last_error(m.m)))
 }
 
 // Load reads in a Mapnik map XML.
@@ -169,11 +169,11 @@ func (m *Map) lastError() error {
 func (m *Map) Load(stylesheet string) error {
 	cs := C.CString(stylesheet)
 	defer C.free(unsafe.Pointer(cs))
-	if C.mapnik_map_load(&m.m, cs) != 0 {
+	if C.mapnik_map_load(m.m, cs) != 0 {
 		return m.lastError()
 	}
 
-	C.mapnik_apply_layer_off_hack(&m.m)
+	C.mapnik_apply_layer_off_hack(m.m)
 	return nil
 }
 
@@ -181,36 +181,37 @@ func (m *Map) Load(stylesheet string) error {
 // Sizes larger than 16k pixels are ignored by Mapnik. Use NewSized
 // to initialize larger maps.
 func (m *Map) Resize(width, height int) {
-	C.mapnik_map_resize(&m.m, C.uint(width), C.uint(height))
+	C.mapnik_map_resize(m.m, C.uint(width), C.uint(height))
 	m.width = width
 	m.height = height
 }
 
 // Free deallocates the map.
 func (m *Map) Free() {
-	C.mapnik_map_free(&m.m)
+	C.mapnik_map_free(m.m)
+	m.m = nil
 }
 
 // SRS returns the projection of the map.
 func (m *Map) SRS() string {
-	return C.GoString(C.mapnik_map_get_srs(&m.m))
+	return C.GoString(C.mapnik_map_get_srs(m.m))
 }
 
 // SetSRS sets the projection of the map as a proj4 string ('+init=epsg:4326', etc).
 func (m *Map) SetSRS(srs string) {
 	cs := C.CString(srs)
 	defer C.free(unsafe.Pointer(cs))
-	C.mapnik_map_set_srs(&m.m, cs)
+	C.mapnik_map_set_srs(m.m, cs)
 }
 
 // ScaleDenominator returns the current scale denominator. Call after Resize and ZoomAll/ZoomTo.
 func (m *Map) ScaleDenominator() float64 {
-	return float64(C.mapnik_map_get_scale_denominator(&m.m))
+	return float64(C.mapnik_map_get_scale_denominator(m.m))
 }
 
 // ZoomAll zooms to the maximum extent.
 func (m *Map) ZoomAll() error {
-	if C.mapnik_map_zoom_all(&m.m) != 0 {
+	if C.mapnik_map_zoom_all(m.m) != 0 {
 		return m.lastError()
 	}
 	return nil
@@ -220,25 +221,25 @@ func (m *Map) ZoomAll() error {
 func (m *Map) ZoomTo(minx, miny, maxx, maxy float64) {
 	bbox := C.mapnik_bbox(C.double(minx), C.double(miny), C.double(maxx), C.double(maxy))
 	defer C.mapnik_bbox_free(bbox)
-	C.mapnik_map_zoom_to_box(&m.m, bbox)
+	C.mapnik_map_zoom_to_box(m.m, bbox)
 }
 
 func (m *Map) BackgroundColor() color.NRGBA {
 	c := color.NRGBA{}
-	C.mapnik_map_background(&m.m, (*C.uint8_t)(&c.R), (*C.uint8_t)(&c.G), (*C.uint8_t)(&c.B), (*C.uint8_t)(&c.A))
+	C.mapnik_map_background(m.m, (*C.uint8_t)(&c.R), (*C.uint8_t)(&c.G), (*C.uint8_t)(&c.B), (*C.uint8_t)(&c.A))
 	return c
 }
 
 func (m *Map) SetBackgroundColor(c color.NRGBA) {
-	C.mapnik_map_set_background(&m.m, C.uint8_t(c.R), C.uint8_t(c.G), C.uint8_t(c.B), C.uint8_t(c.A))
+	C.mapnik_map_set_background(m.m, C.uint8_t(c.R), C.uint8_t(c.G), C.uint8_t(c.B), C.uint8_t(c.A))
 }
 
 func (m *Map) printLayerStatus() {
-	n := C.mapnik_map_layer_count(&m.m)
+	n := C.mapnik_map_layer_count(m.m)
 	for i := 0; i < int(n); i++ {
 		fmt.Println(
-			C.GoString(C.mapnik_map_layer_name(&m.m, C.size_t(i))),
-			C.mapnik_map_layer_is_active(&m.m, C.size_t(i)),
+			C.GoString(C.mapnik_map_layer_name(m.m, C.size_t(i))),
+			C.mapnik_map_layer_is_active(m.m, C.size_t(i)),
 		)
 	}
 }
@@ -251,10 +252,10 @@ func (m *Map) storeLayerStatus() {
 }
 
 func (m *Map) currentLayerStatus() []bool {
-	n := C.mapnik_map_layer_count(&m.m)
+	n := C.mapnik_map_layer_count(m.m)
 	active := make([]bool, n)
 	for i := 0; i < int(n); i++ {
-		if C.mapnik_map_layer_is_active(&m.m, C.size_t(i)) == 1 {
+		if C.mapnik_map_layer_is_active(m.m, C.size_t(i)) == 1 {
 			active[i] = true
 		}
 	}
@@ -265,16 +266,16 @@ func (m *Map) resetLayerStatus() {
 	if len(m.layerStatus) == 0 {
 		return // not stored
 	}
-	n := C.mapnik_map_layer_count(&m.m)
+	n := C.mapnik_map_layer_count(m.m)
 	if int(n) > len(m.layerStatus) {
 		// should not happen
 		return
 	}
 	for i := 0; i < int(n); i++ {
 		if m.layerStatus[i] {
-			C.mapnik_map_layer_set_active(&m.m, C.size_t(i), 1)
+			C.mapnik_map_layer_set_active(m.m, C.size_t(i), 1)
 		} else {
-			C.mapnik_map_layer_set_active(&m.m, C.size_t(i), 0)
+			C.mapnik_map_layer_set_active(m.m, C.size_t(i), 0)
 		}
 	}
 	m.layerStatus = nil
@@ -307,15 +308,15 @@ func (f SelectorFunc) Select(layername string) Status {
 func (m *Map) SelectLayers(selector LayerSelector) bool {
 	m.storeLayerStatus()
 	selected := false
-	n := C.mapnik_map_layer_count(&m.m)
+	n := C.mapnik_map_layer_count(m.m)
 	for i := 0; i < int(n); i++ {
-		layerName := C.GoString(C.mapnik_map_layer_name(&m.m, C.size_t(i)))
+		layerName := C.GoString(C.mapnik_map_layer_name(m.m, C.size_t(i)))
 		switch selector.Select(layerName) {
 		case Include:
 			selected = true
-			C.mapnik_map_layer_set_active(&m.m, C.size_t(i), 1)
+			C.mapnik_map_layer_set_active(m.m, C.size_t(i), 1)
 		case Exclude:
-			C.mapnik_map_layer_set_active(&m.m, C.size_t(i), 0)
+			C.mapnik_map_layer_set_active(m.m, C.size_t(i), 0)
 		case Default:
 			selected = true
 		}
@@ -329,11 +330,11 @@ func (m *Map) ResetLayers() {
 }
 
 func (m *Map) SetMaxExtent(minx, miny, maxx, maxy float64) {
-	C.mapnik_map_set_maximum_extent(&m.m, C.double(minx), C.double(miny), C.double(maxx), C.double(maxy))
+	C.mapnik_map_set_maximum_extent(m.m, C.double(minx), C.double(miny), C.double(maxx), C.double(maxy))
 }
 
 func (m *Map) ResetMaxExtent() {
-	C.mapnik_map_reset_maximum_extent(&m.m)
+	C.mapnik_map_reset_maximum_extent(m.m)
 }
 
 // RenderOpts defines rendering options.
@@ -352,7 +353,7 @@ func (m *Map) Render(opts RenderOpts) ([]byte, error) {
 	if scaleFactor == 0.0 {
 		scaleFactor = 1.0
 	}
-	i := C.mapnik_map_render_to_image(&m.m, C.double(opts.Scale), C.double(scaleFactor))
+	i := C.mapnik_map_render_to_image(m.m, C.double(opts.Scale), C.double(scaleFactor))
 	if i == nil {
 		return nil, m.lastError()
 	}
@@ -383,7 +384,7 @@ func (m *Map) RenderImage(opts RenderOpts) (*image.NRGBA, error) {
 	if scaleFactor == 0.0 {
 		scaleFactor = 1.0
 	}
-	i := C.mapnik_map_render_to_image(&m.m, C.double(opts.Scale), C.double(scaleFactor))
+	i := C.mapnik_map_render_to_image(m.m, C.double(opts.Scale), C.double(scaleFactor))
 	if i == nil {
 		return nil, m.lastError()
 	}
@@ -414,7 +415,7 @@ func (m *Map) RenderToFile(opts RenderOpts, path string) error {
 		format = C.CString("png256")
 	}
 	defer C.free(unsafe.Pointer(format))
-	if C.mapnik_map_render_to_file(&m.m, cs, C.double(opts.Scale), C.double(scaleFactor), format) != 0 {
+	if C.mapnik_map_render_to_file(m.m, cs, C.double(opts.Scale), C.double(scaleFactor), format) != 0 {
 		return m.lastError()
 	}
 	return nil
@@ -422,7 +423,7 @@ func (m *Map) RenderToFile(opts RenderOpts, path string) error {
 
 // SetBufferSize sets the pixel buffer at the map image edges where Mapnik should not render any labels.
 func (m *Map) SetBufferSize(s int) {
-	C.mapnik_map_set_buffer_size(&m.m, C.int(s))
+	C.mapnik_map_set_buffer_size(m.m, C.int(s))
 }
 
 // Encode image.Image with Mapniks image encoder.
