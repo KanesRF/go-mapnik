@@ -78,7 +78,6 @@ func RegisterFonts(fontPath string) error {
 			if !isFontFile(path) {
 				return nil
 			}
-			fmt.Println(path)
 			cs := C.CString(path)
 			defer C.free(unsafe.Pointer(cs))
 			// Register fonts one-by-one. See comment in RegisterDatasources.
@@ -133,7 +132,7 @@ func init() {
 
 // Map base type
 type Map struct {
-	m           *C.struct__mapnik_map_t
+	m           C.struct__mapnik_map_t
 	width       int
 	height      int
 	layerStatus []bool
