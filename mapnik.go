@@ -189,7 +189,6 @@ func (m *Map) Resize(width, height int) {
 // Free deallocates the map.
 func (m *Map) Free() {
 	C.mapnik_map_free(&m.m)
-	&m.m = nil
 }
 
 // SRS returns the projection of the map.
@@ -266,7 +265,7 @@ func (m *Map) resetLayerStatus() {
 	if len(m.layerStatus) == 0 {
 		return // not stored
 	}
-	n := C.mapnik_map_layer_count(m.m)
+	n := C.mapnik_map_layer_count(&m.m)
 	if int(n) > len(m.layerStatus) {
 		// should not happen
 		return
@@ -308,7 +307,7 @@ func (f SelectorFunc) Select(layername string) Status {
 func (m *Map) SelectLayers(selector LayerSelector) bool {
 	m.storeLayerStatus()
 	selected := false
-	n := C.mapnik_map_layer_count(m.m)
+	n := C.mapnik_map_layer_count(&m.m)
 	for i := 0; i < int(n); i++ {
 		layerName := C.GoString(C.mapnik_map_layer_name(&m.m, C.size_t(i)))
 		switch selector.Select(layerName) {
